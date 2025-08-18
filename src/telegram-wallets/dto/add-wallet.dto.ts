@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, ValidateIf, Matches, MinLength } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, ValidateIf, Matches, MinLength, IsInt, Min, Max } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AddWalletDto {
@@ -17,13 +17,13 @@ export class AddWalletDto {
     type: string;
 
     @ApiProperty({
-        description: 'Private key của ví (chỉ cần thiết khi type=import)',
+        description: 'Private key của ví (chỉ cần thiết khi type=import). Có thể là string đơn hoặc mảng string để import nhiều ví',
         example: '3q9Mck1DYsWracqakBzJExNeAHr83vZs3tWNaJpEaEMtgEcrbrjQXTFi7uPjkeuvhT8M6g7LzQmy',
         required: false
     })
-    @IsString()
     @IsOptional()
-    private_key?: string;
+    @ValidateIf((o) => o.type === 'import')
+    private_key?: any;
 
     @ApiProperty({
         description: 'Nickname của ví (bắt buộc khi type=other hoặc khi import ví mới). Chỉ chấp nhận chữ cái không dấu, số và dấu gạch dưới',
@@ -32,7 +32,7 @@ export class AddWalletDto {
     })
     @IsString()
     @IsNotEmpty()
-    @ValidateIf((o) => o.type === 'other' || (o.type === 'import' && !o.private_key))
+    @ValidateIf((o) => o.type === 'other' || (o.type === 'import'))
     @MinLength(1, {
         message: 'Nickname phải có ít nhất 1 ký tự'
     })
@@ -46,6 +46,17 @@ export class AddWalletDto {
     @IsString()
     @IsOptional()
     country?: string;
+
+    @ApiProperty({
+        description: 'Số lượng ví muốn tạo (mặc định là 1)',
+        example: 2,
+        minimum: 1,
+        required: false
+    })
+    @IsInt()
+    @Min(1)
+    @IsOptional()
+    quantity?: number = 1;
 }
 
 export class AddWalletResponseDto {
@@ -56,7 +67,7 @@ export class AddWalletResponseDto {
     message: string;
 
     @ApiProperty({
-        description: 'Dữ liệu ví mới được thêm',
+        description: 'Dữ liệu ví mới được thêm (có thể là 1 ví hoặc mảng các ví)',
         required: false,
         example: {
             wallet_id: 123,
@@ -76,5 +87,20 @@ export class AddWalletResponseDto {
         wallet_name: string | null;
         wallet_nick_name: string;
         wallet_country: string | null;
-    };
+    } | Array<{
+        wallet_id: number;
+        solana_address: string;
+        eth_address: string;
+        wallet_type: string;
+        wallet_name: string | null;
+        wallet_nick_name: string;
+        wallet_country: string | null;
+    }>;
+
+    @ApiProperty({
+        description: 'Số lượng ví đã được tạo thành công',
+        required: false,
+        example: 2
+    })
+    created_count?: number;
 } 

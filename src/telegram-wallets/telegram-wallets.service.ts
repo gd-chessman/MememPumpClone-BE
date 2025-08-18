@@ -59,6 +59,77 @@ export class TelegramWalletsService {
     private readonly logger = new Logger(TelegramWalletsService.name);
     private readonly DEFAULT_PUBLIC_KEY = new PublicKey('11111111111111111111111111111111');
 
+    /**
+     * Tạo tên ví tự động với số thứ tự
+     */
+    private generateWalletName(baseName: string, index: number): string {
+        const paddedIndex = index.toString().padStart(2, '0');
+        return `${baseName} ${paddedIndex}`;
+    }
+
+    /**
+     * Tạo nickname tự động với số thứ tự
+     */
+    private generateWalletNickname(baseNickname: string, index: number): string {
+        const paddedIndex = index.toString().padStart(2, '0');
+        return `${baseNickname}_${paddedIndex}`;
+    }
+
+    /**
+     * Tìm nickname không bị trùng
+     */
+    private async findAvailableNickname(baseNickname: string, startIndex: number = 1): Promise<string> {
+        let index = startIndex;
+        let nickname = this.generateWalletNickname(baseNickname, index);
+        
+        // Tìm nickname không bị trùng
+        while (index <= 1000) { // Giới hạn 1000 lần thử
+            const existingWallet = await this.listWalletRepository.findOne({
+                where: { wallet_nick_name: nickname }
+            });
+            
+            if (!existingWallet) {
+                return nickname;
+            }
+            
+            index++;
+            nickname = this.generateWalletNickname(baseNickname, index);
+        }
+        
+        // Nếu vẫn không tìm được, thêm timestamp
+        const timestamp = Date.now().toString().slice(-6);
+        return `${baseNickname}_${timestamp}`;
+    }
+
+    /**
+     * Tìm tên ví không bị trùng cho user cụ thể
+     */
+    private async findAvailableWalletName(baseName: string, startIndex: number = 1, userId: number): Promise<string> {
+        let index = startIndex;
+        let walletName = this.generateWalletName(baseName, index);
+        
+        // Tìm tên ví không bị trùng cho user này
+        while (index <= 1000) { // Giới hạn 1000 lần thử
+            const existingWallet = await this.walletAuthRepository.findOne({
+                where: { 
+                    wa_name: walletName,
+                    wa_user_id: userId
+                }
+            });
+            
+            if (!existingWallet) {
+                return walletName;
+            }
+            
+            index++;
+            walletName = this.generateWalletName(baseName, index);
+        }
+        
+        // Nếu vẫn không tìm được, thêm timestamp
+        const timestamp = Date.now().toString().slice(-6);
+        return `${baseName}_${timestamp}`;
+    }
+
     constructor(
         @InjectRepository(UserWalletCode)
         private userWalletCodeRepository: Repository<UserWalletCode>,
@@ -447,7 +518,7 @@ export class TelegramWalletsService {
     async addWallet(user, addWalletDto: AddWalletDto) {
         try {
             const { uid } = user;
-            const { name, type, private_key, nick_name, country } = addWalletDto;
+            const { name, type, private_key, nick_name, country, quantity = 1 } = addWalletDto;
 
             // Kiểm tra user có tồn tại không
             const userWallet = await this.userWalletRepository.findOne({
@@ -461,6 +532,42 @@ export class TelegramWalletsService {
                 };
             }
 
+            // Xử lý quantity > 1
+            if (quantity > 1) {
+                // Kiểm tra quantity hợp lệ
+                if (quantity < 1) {
+                    return {
+                        status: 400,
+                        message: 'Quantity must be at least 1',
+                    };
+                }
+
+                // Kiểm tra type import với quantity
+                if (type === 'import') {
+                    // Kiểm tra private_key có được cung cấp không
+                    if (!private_key) {
+                        return {
+                            status: 400,
+                            message: 'Private key is required for import',
+                        };
+                    }
+
+                    // Kiểm tra số lượng private keys có đủ không
+                    const privateKeys = Array.isArray(private_key) ? private_key : [private_key];
+                    if (privateKeys.length < quantity) {
+                        return {
+                            status: 400,
+                            message: `Not enough private keys. Need ${quantity} keys, but only ${privateKeys.length} provided`,
+                        };
+                    }
+
+                    return await this.createMultipleWallets(user, addWalletDto, userWallet);
+                }
+
+                return await this.createMultipleWallets(user, addWalletDto, userWallet);
+            }
+
+            // Xử lý quantity = 1 (logic cũ)
             let listWallet: ListWallet | undefined;
 
             if (type === 'other') {
@@ -2388,5 +2495,109 @@ export class TelegramWalletsService {
 
     async updateExistingTokenLogoUrls(): Promise<{ updated: number; errors: number }> {
         return await this.solanaService.updateExistingTokenLogoUrls();
+    }
+
+    private async createMultipleWallets(user: any, addWalletDto: AddWalletDto, userWallet: any) {
+        const { name, nick_name, quantity = 1, type, private_key } = addWalletDto;
+        const createdWallets: any[] = [];
+        let currentNicknameIndex = 1;
+        let currentNameIndex = 1;
+
+        if (type === 'other') {
+            // Xử lý tạo nhiều ví mới
+            for (let i = 1; i <= quantity; i++) {
+                let walletName = name;
+                let walletNickname = nick_name;
+
+                // Tìm tên ví không bị trùng cho user này
+                if (name) {
+                    walletName = await this.findAvailableWalletName(name, currentNameIndex, user.id);
+                    // Cập nhật index cho lần tiếp theo
+                    const nameNumber = parseInt(walletName.split(' ').pop() || '1');
+                    currentNameIndex = nameNumber + 1;
+                }
+                
+                // Tìm nickname không bị trùng
+                if (nick_name) {
+                    walletNickname = await this.findAvailableNickname(nick_name, currentNicknameIndex);
+                    // Cập nhật index cho lần tiếp theo
+                    const nicknameNumber = parseInt(walletNickname.split('_').pop() || '1');
+                    currentNicknameIndex = nicknameNumber + 1;
+                }
+
+                const singleWalletDto = {
+                    ...addWalletDto,
+                    name: walletName,
+                    nick_name: walletNickname,
+                    quantity: 1
+                };
+
+                const result = await this.addWallet(user, singleWalletDto);
+                if (result.status === 200) {
+                    createdWallets.push(result.data);
+                }
+            }
+        } else if (type === 'import') {
+            // Xử lý import nhiều ví
+            const privateKeys = Array.isArray(private_key) ? private_key : [private_key];
+            const keysToProcess = privateKeys.slice(0, quantity);
+
+            for (let i = 0; i < keysToProcess.length; i++) {
+                let walletName = name;
+                let walletNickname = nick_name;
+
+                // Tìm tên ví không bị trùng cho user này
+                if (name) {
+                    walletName = await this.findAvailableWalletName(name, currentNameIndex, user.id);
+                    // Cập nhật index cho lần tiếp theo
+                    const nameNumber = parseInt(walletName.split(' ').pop() || '1');
+                    currentNameIndex = nameNumber + 1;
+                }
+                
+                // Tìm nickname không bị trùng
+                if (nick_name) {
+                    walletNickname = await this.findAvailableNickname(nick_name, currentNicknameIndex);
+                    // Cập nhật index cho lần tiếp theo
+                    const nicknameNumber = parseInt(walletNickname.split('_').pop() || '1');
+                    currentNicknameIndex = nicknameNumber + 1;
+                }
+
+                // Nếu ví đã tồn tại và là ví main của tài khoản khác, KHÔNG cập nhật nickname
+                // chỉ kết nối ví với tài khoản hiện tại và bổ sung name
+                let finalNickname = walletNickname;
+                const existingByKey = await this.listWalletRepository.createQueryBuilder('lw')
+                    .where("lw.wallet_private_key::jsonb->>'solana' = :pk", { pk: keysToProcess[i] })
+                    .getOne();
+                if (existingByKey) {
+                    const mainAuth = await this.walletAuthRepository.findOne({
+                        where: { wa_wallet_id: existingByKey.wallet_id, wa_type: 'main' }
+                    });
+                    if (mainAuth && mainAuth.wa_user_id !== user.id) {
+                        // Bỏ qua cập nhật nickname (để undefined)
+                        finalNickname = undefined;
+                    }
+                }
+
+                const singleWalletDto = {
+                    ...addWalletDto,
+                    private_key: keysToProcess[i],
+                    name: walletName,
+                    nick_name: finalNickname,
+                    quantity: 1
+                };
+
+                const result = await this.addWallet(user, singleWalletDto);
+                if (result.status === 200) {
+                    createdWallets.push(result.data);
+                }
+            }
+        }
+
+        return {
+            status: 200,
+            message: `Successfully created ${createdWallets.length} wallets`,
+            data: createdWallets,
+            created_count: createdWallets.length
+        };
     }
 }

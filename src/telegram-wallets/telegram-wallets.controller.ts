@@ -122,11 +122,12 @@ export class TelegramWalletsController {
 
     @UseGuards(JwtAuthGuard)
     @Post('add-wallet')
-    @ApiOperation({ summary: 'Thêm ví mới hoặc import ví đã tồn tại' })
+    @ApiOperation({ summary: 'Thêm ví mới hoặc import ví đã tồn tại (có thể tạo nhiều ví cùng lúc)' })
     @ApiResponse({ status: 200, description: 'Ví đã được thêm thành công', type: AddWalletResponseDto })
     @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
     @ApiResponse({ status: 401, description: 'Không được phép' })
     async addWallet(@Request() req, @Body() addWalletDto: AddWalletDto) {
+        console.log(addWalletDto);
         try {
             if (!addWalletDto.type || (addWalletDto.type === 'import' && !addWalletDto.private_key)) {
                 throw new HttpException({
@@ -135,8 +136,42 @@ export class TelegramWalletsController {
                     message: 'Type is required, and private key is required for import'
                 }, HttpStatus.BAD_REQUEST);
             }
+
+            // Kiểm tra quantity
+            const quantity = addWalletDto.quantity || 1;
+            if (quantity < 1) {
+                throw new HttpException({
+                    status: HttpStatus.BAD_REQUEST,
+                    error: 'Invalid quantity',
+                    message: 'Quantity must be at least 1'
+                }, HttpStatus.BAD_REQUEST);
+            }
+
+            // Kiểm tra type import với quantity
+            if (addWalletDto.type === 'import' && quantity > 1) {
+                // Kiểm tra private_key có được cung cấp không
+                if (!addWalletDto.private_key) {
+                    throw new HttpException({
+                        status: HttpStatus.BAD_REQUEST,
+                        error: 'Private key required for import',
+                        message: 'Private key is required for import type'
+                    }, HttpStatus.BAD_REQUEST);
+                }
+
+                // Kiểm tra số lượng private keys có đủ không
+                const privateKeys = Array.isArray(addWalletDto.private_key) ? addWalletDto.private_key : [addWalletDto.private_key];
+                if (privateKeys.length < quantity) {
+                    throw new HttpException({
+                        status: HttpStatus.BAD_REQUEST,
+                        error: 'Not enough private keys',
+                        message: `Not enough private keys. Need ${quantity} keys, but only ${privateKeys.length} provided`
+                    }, HttpStatus.BAD_REQUEST);
+                }
+            }
+
             const result = await this.telegramWalletsService.addWallet(req.user, addWalletDto);
-            if (result.status === 409 && result.error_code === 'NICKNAME_EXISTS') {
+            
+            if (result.status === 409 && 'error_code' in result && result.error_code === 'NICKNAME_EXISTS') {
                 throw new HttpException({
                     status: HttpStatus.CONFLICT,
                     error: result.message,
@@ -144,6 +179,7 @@ export class TelegramWalletsController {
                     message: 'Wallet nickname already exists'
                 }, HttpStatus.CONFLICT);
             }
+            
             if (result.status === 400) {
                 throw new HttpException({
                     status: HttpStatus.BAD_REQUEST,
@@ -151,6 +187,7 @@ export class TelegramWalletsController {
                     message: 'Failed to add wallet'
                 }, HttpStatus.BAD_REQUEST);
             }
+            
             return result;
         } catch (error) {
             throw new HttpException({
