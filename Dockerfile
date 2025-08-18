@@ -39,7 +39,7 @@ COPY --from=builder /app/vendor ./vendor
 COPY --from=builder /app/vendor/spl-token-0.4.13/node_modules ./vendor/spl-token-0.4.13/node_modules
 
 # Copy file .env vào container
-COPY --from=builder /app/.env .env
+# COPY --from=builder /app/.env .env
 
 # Expose cổng chạy server
 EXPOSE 8000
