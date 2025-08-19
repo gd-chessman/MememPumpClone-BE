@@ -2626,7 +2626,8 @@ export class TelegramWalletsService {
             status: 200,
             message: `Successfully created ${createdWallets.length} wallets`,
             data: createdWallets,
-            created_count: createdWallets.length
+            created_count: createdWallets.length,
+            failed_count: quantity - createdWallets.length
         };
     }
 }
