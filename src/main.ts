@@ -34,7 +34,7 @@ async function bootstrap() {
 
   const corsConfig = {
     origin: process.env.NODE_ENV === 'production'
-      ? ['https://memepump.gg', 'https://www.memepump.gg', 'https://memepump.vip', 'https://admin.memepump.vip', 'https://admin.memepump.gg', 'https://affiliate.memepump.vip', 'https://affiliate.memepump.gg', 'http://localhost:3600', 'http://localhost:3000']
+      ? ['https://meme-pump-frontend-clone.vercel.app', 'https://www.memepump.gg', 'https://memepump.vip', 'https://admin.memepump.vip', 'https://admin.memepump.gg', 'https://affiliate.memepump.vip', 'https://affiliate.memepump.gg', 'http://localhost:3600', 'http://localhost:3000']
       : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8000', 'http://localhost:3600', 'http://localhost:3700'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-No-Redirect', 'token'],
