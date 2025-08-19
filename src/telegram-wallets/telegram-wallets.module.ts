@@ -19,6 +19,7 @@ import { TelegramBotModule } from '../telegram-bot/telegram-bot.module';
 import { HttpModule } from '@nestjs/axios';
 import { NotificationModule } from '../notifications/notification.module';
 import { BgRefModule } from '../referral/bg-ref.module';
+import { MasterTradingModule } from '../master-trading/master-trading.module';
 
 @Module({
   imports: [
@@ -38,7 +39,8 @@ import { BgRefModule } from '../referral/bg-ref.module';
     forwardRef(() => ChatsModule),
     forwardRef(() => TelegramBotModule),
     NotificationModule,
-    forwardRef(() => BgRefModule)
+    forwardRef(() => BgRefModule),
+    MasterTradingModule
   ],
   controllers: [TelegramWalletsController],
   providers: [

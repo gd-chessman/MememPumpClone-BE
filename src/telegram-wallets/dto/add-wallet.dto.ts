@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, ValidateIf, Matches, MinLength, IsInt, Min, Max } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, ValidateIf, Matches, MinLength, IsInt, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AddWalletDto {
@@ -23,7 +23,7 @@ export class AddWalletDto {
     })
     @IsOptional()
     @ValidateIf((o) => o.type === 'import')
-    private_key?: any;
+    private_key?: any; // User's last change, assistant intended string | string[]
 
     @ApiProperty({
         description: 'Nickname của ví (bắt buộc khi type=other hoặc khi import ví mới). Chỉ chấp nhận chữ cái không dấu, số và dấu gạch dưới',
@@ -57,6 +57,15 @@ export class AddWalletDto {
     @Min(1)
     @IsOptional()
     quantity?: number = 1;
+
+    @ApiProperty({
+        description: 'Địa chỉ ví của master muốn kết nối (tùy chọn)',
+        example: '8ZxXpnYm4qHjGV3cLx7e5iosAJpXXXXXXXXXXXXXX',
+        required: false
+    })
+    @IsString()
+    @IsOptional()
+    master?: string;
 }
 
 export class AddWalletResponseDto {
@@ -76,7 +85,8 @@ export class AddWalletResponseDto {
             wallet_type: 'other',
             wallet_name: 'Ví chính của tôi',
             wallet_nick_name: 'my_wallet_1',
-            wallet_country: 'Vietnam'
+            wallet_country: 'Vietnam',
+            master_connected: '8ZxXpnYm4qHjGV3cLx7e5iosAJpXXXXXXXXXXXXXX'
         }
     })
     data?: {
@@ -87,6 +97,7 @@ export class AddWalletResponseDto {
         wallet_name: string | null;
         wallet_nick_name: string;
         wallet_country: string | null;
+        master_connected?: string;
     } | Array<{
         wallet_id: number;
         solana_address: string;
@@ -95,6 +106,7 @@ export class AddWalletResponseDto {
         wallet_name: string | null;
         wallet_nick_name: string;
         wallet_country: string | null;
+        master_connected?: string;
     }>;
 
     @ApiProperty({

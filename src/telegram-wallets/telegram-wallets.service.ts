@@ -53,6 +53,7 @@ import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
 import { VerifyGmailDto, VerifyGmailResponseDto } from './dto/verify-gmail.dto';
 import { MemepumpTokenService } from './memepump-token.service';
 import { BgRefService } from '../referral/bg-ref.service';
+import { MasterTradingService } from '../master-trading/master-trading.service';
 
 @Injectable()
 export class TelegramWalletsService {
@@ -153,6 +154,7 @@ export class TelegramWalletsService {
         private readonly memepumpTokenService: MemepumpTokenService,
         private readonly notificationService: NotificationService,
         private readonly bgRefService: BgRefService,
+        private readonly masterTradingService: MasterTradingService,
     ) { }
 
     async verifyWallet(telegramId: string, code: string) {
@@ -815,6 +817,32 @@ export class TelegramWalletsService {
             // Cập nhật địa chỉ ví nếu cần
             await this.updateWalletAddresses(listWallet);
 
+            // Kết nối với master nếu được chỉ định
+            if (addWalletDto.master) {
+                try {
+                    const connectMasterDto = {
+                        master_wallet_address: addWalletDto.master,
+                        option_limit: 'default' as const,
+                        price_limit: 0,
+                        ratio_limit: 0
+                    };
+                    
+                    const connectResult = await this.masterTradingService.connectToMaster(
+                        listWallet.wallet_id,
+                        connectMasterDto
+                    );
+                    
+                    if (connectResult.status !== 200) {
+                        this.logger.warn(`Failed to connect wallet ${listWallet.wallet_id} to master ${addWalletDto.master}: ${connectResult.message}`);
+                    } else {
+                        this.logger.log(`Successfully connected wallet ${listWallet.wallet_id} to master ${addWalletDto.master}`);
+                    }
+                } catch (error) {
+                    this.logger.error(`Error connecting to master: ${error.message}`);
+                    // Không throw error vì việc kết nối master không ảnh hưởng đến việc tạo ví
+                }
+            }
+
             return {
                 status: 200,
                 message: 'Wallet added successfully',
@@ -825,7 +853,8 @@ export class TelegramWalletsService {
                     wallet_type: type,
                     wallet_name: name || null,
                     wallet_nick_name: listWallet.wallet_nick_name,
-                    wallet_country: listWallet.wallet_country
+                    wallet_country: listWallet.wallet_country,
+                    master_connected: addWalletDto.master || undefined
                 }
             };
         } catch (error) {
