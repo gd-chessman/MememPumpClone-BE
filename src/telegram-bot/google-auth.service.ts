@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { Request } from 'express';
 
 interface GoogleTokenResponse {
     access_token: string;
@@ -49,18 +50,43 @@ export class GoogleAuthService {
         this.redirectUri = redirectUri;
     }
 
-    async exchangeCodeForToken(code: string, path: string = 'security'): Promise<GoogleTokenResponse> {
+    async exchangeCodeForToken(code: string, path: string = 'security', req?: Request): Promise<GoogleTokenResponse> {
         try {
             // Decode URL encoded code
             const decodedCode = decodeURIComponent(code);
-            const redirectUri = this.configService.get<string>('URL_FRONTEND') + '/' + path;
+            
+            // Build redirect URI - check if request origin matches boss or main domain
+            const baseUrl = this.configService.get<string>('URL_FRONTEND');
+            const bossUrl = this.configService.get<string>('URL_FRONTEND_BOSS');
+            
+            if (!baseUrl) {
+                throw new BadRequestException('URL_FRONTEND configuration is missing');
+            }
+            
+            // Detect which domain the request came from
+            let redirectUri: string;
+            if (req) {
+                const origin = req.headers.origin || req.headers.referer;
+                if (origin && bossUrl && origin.includes(new URL(bossUrl).hostname)) {
+                    // Request came from boss subdomain, redirect to boss subdomain
+                    redirectUri = `${bossUrl}/${path}`;
+                } else {
+                    // Request came from main domain or unknown, redirect to main domain
+                    redirectUri = `${baseUrl}/${path}`;
+                }
+            } else {
+                // Fallback: use main domain
+                redirectUri = `${baseUrl}/${path}`;
+            }
             
             this.logger.debug('Attempting to exchange code for token with params:', {
                 originalCode: code,
                 decodedCode,
                 client_id: this.clientId,
                 redirect_uri: redirectUri,
-                grant_type: 'authorization_code'
+                grant_type: 'authorization_code',
+                origin: req?.headers.origin,
+                referer: req?.headers.referer
             });
 
             const response = await firstValueFrom(

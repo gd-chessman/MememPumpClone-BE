@@ -1,38 +1,33 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { Keypair } from '@solana/web3.js';
+import bs58 from 'bs58';
+import { ethers } from 'ethers';
+import { Request } from 'express';
+import { GoogleAuthService } from './google-auth.service';
+import { TelegramBotService } from './telegram-bot.service';
+import { AuthService } from '../auth/auth.service';
+import { BgRefService } from '../referral/bg-ref.service';
 import { UserWallet } from '../telegram-wallets/entities/user-wallet.entity';
 import { ListWallet } from '../telegram-wallets/entities/list-wallet.entity';
 import { WalletAuth } from '../telegram-wallets/entities/wallet-auth.entity';
 import { WalletReferent } from '../referral/entities/wallet-referent.entity';
-import { TelegramBotService } from './telegram-bot.service';
-import { AuthService } from '../auth/auth.service';
-import { GoogleAuthService } from './google-auth.service';
-import { BgRefService } from '../referral/bg-ref.service';
-import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
-import { ethers } from 'ethers';
 
 export interface GoogleLoginDto {
-    code: string;  // Authorization code from Google
-    refCode?: string; // Referral code (optional)
+    code: string;
+    refCode?: string;
 }
 
 export interface LoginResponse {
     status: number;
     message: string;
-    data: {
-        token: string;
-        user: {
-            id: number;
-            email: string;
-            wallet: {
-                id: number;
-                solana: string;
-                ethereum: string;
-                nickname: string | null;
-            };
-        };
+    data?: {
+        user: UserWallet;
+        wallet: ListWallet;
+        isNewUser: boolean;
+        token?: string;
     };
 }
 
@@ -55,15 +50,15 @@ export class LoginEmailService {
         private readonly bgRefService: BgRefService,
     ) {}
 
-    async handleGoogleLogin(loginData: GoogleLoginDto): Promise<LoginResponse> {
+    async handleGoogleLogin(loginData: GoogleLoginDto, req: Request): Promise<LoginResponse> {
         try {
             this.logger.debug('Starting Google login process with code:', {
                 codeLength: loginData.code.length,
                 codePrefix: loginData.code.substring(0, 10) + '...'
             });
 
-            // 1. Exchange code for tokens
-            const tokens = await this.googleAuthService.exchangeCodeForToken(loginData.code, 'login-email');
+            // 1. Exchange code for tokens - pass request to detect origin domain
+            const tokens = await this.googleAuthService.exchangeCodeForToken(loginData.code, 'login-email', req);
             this.logger.debug('Successfully exchanged code for tokens:', {
                 hasAccessToken: !!tokens.access_token,
                 hasIdToken: !!tokens.id_token,
@@ -358,17 +353,10 @@ export class LoginEmailService {
             status: 200,
             message: isNewUser ? 'New account created successfully' : 'Login successful',
             data: {
-                token: token.token,
-                user: {
-                    id: userWallet.uw_id,
-                    email: userWallet.uw_email,
-                    wallet: {
-                        id: listWallet.wallet_id,
-                        solana: listWallet.wallet_solana_address,
-                        ethereum: listWallet.wallet_eth_address,
-                        nickname: listWallet.wallet_nick_name
-                    }
-                }
+                user: userWallet,
+                wallet: listWallet,
+                isNewUser: isNewUser,
+                token: token.token
             }
         };
     }
