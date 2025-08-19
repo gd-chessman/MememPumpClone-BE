@@ -54,7 +54,7 @@ import { ReferralModule } from '../referral/referral.module';
         }),
         ScheduleModule.forRoot(),
         SolanaModule,
-        TelegramWalletsModule,
+        forwardRef(() => TelegramWalletsModule),
         NotificationModule,
         EventEmitterModule.forRoot(),
         forwardRef(() => OrderBookModule),

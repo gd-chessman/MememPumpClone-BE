@@ -40,7 +40,7 @@ import { MasterTradingModule } from '../master-trading/master-trading.module';
     forwardRef(() => TelegramBotModule),
     NotificationModule,
     forwardRef(() => BgRefModule),
-    MasterTradingModule
+    forwardRef(() => MasterTradingModule)
   ],
   controllers: [TelegramWalletsController],
   providers: [

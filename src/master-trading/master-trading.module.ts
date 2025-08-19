@@ -40,7 +40,7 @@ import { UserWallet } from '../telegram-wallets/entities/user-wallet.entity';
         EventEmitterModule.forRoot(),
         SolanaModule,
         NotificationModule,
-        TelegramWalletsModule,
+        forwardRef(() => TelegramWalletsModule),
         OrderBookModule,
         PriceFeedModule,
         SharedModule,
