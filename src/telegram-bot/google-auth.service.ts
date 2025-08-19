@@ -57,7 +57,7 @@ export class GoogleAuthService {
             
             // Build redirect URI - check if request origin matches boss or main domain
             const baseUrl = this.configService.get<string>('URL_FRONTEND');
-            const bossUrl = this.configService.get<string>('URL_FRONTEND_BOSS');
+            const bossUrl = this.configService.get<string>('URL_BOSS_FRONTEND');
             
             if (!baseUrl) {
                 throw new BadRequestException('URL_FRONTEND configuration is missing');
