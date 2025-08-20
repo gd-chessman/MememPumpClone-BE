@@ -40,6 +40,7 @@ import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { SolanaPriceCacheService } from '../solana/solana-price-cache.service';
 import { extractSolanaPrivateKey } from '../utils/key-utils';
 import { UserWallet } from '../telegram-wallets/entities/user-wallet.entity';
+import { WalletAuth } from '../telegram-wallets/entities/wallet-auth.entity';
 
 @Injectable()
 export class MasterTradingService implements OnModuleInit {
@@ -90,7 +91,9 @@ export class MasterTradingService implements OnModuleInit {
         private readonly solanaTrackingService: SolanaTrackingService,
         private solanaPriceCacheService: SolanaPriceCacheService,
         @InjectRepository(UserWallet)
-        private userWalletRepository: Repository<UserWallet>
+        private userWalletRepository: Repository<UserWallet>,
+        @InjectRepository(WalletAuth)
+        private walletAuthRepository: Repository<WalletAuth>
     ) {
         // Lắng nghe sự kiện order được thực hiện
         this.eventEmitter.on('order.executed', async (data) => {
@@ -2888,19 +2891,33 @@ feeIncrease: '${((slippage / 3 - 1) * 100).toFixed(4)}%'
                         group_name: auth.master_group.mg_name
                     }));
 
-                // Lấy số dư SOL của member
-                // const solanaBalance = await this.solanaService.getBalance(connection.member_wallet?.wallet_solana_address || '');
+                // Lấy nickname từ list_wallets
+                const memberNickname = connection.member_wallet?.wallet_nick_name || null;
 
-                // Lấy giá SOL trong USD
-                // const solPriceInUsd = await this.solanaPriceCacheService.getTokenPriceInUSD('So11111111111111111111111111111111111111112');
+                // Lấy name theo ưu tiên: WalletAuth.wa_name (ưu tiên main) -> nickname -> rút gọn địa chỉ
+                let memberName: string | null = null;
+                try {
+                    const auth = await this.walletAuthRepository
+                        .createQueryBuilder('auth')
+                        .where('auth.wa_wallet_id = :walletId', { walletId: connection.mc_member_wallet })
+                        .orderBy("CASE WHEN auth.wa_type = 'main' THEN 0 ELSE 1 END", 'ASC')
+                        .addOrderBy("CASE WHEN auth.wa_name IS NULL OR auth.wa_name = '' THEN 1 ELSE 0 END", 'ASC')
+                        .getOne();
+                    if (auth && auth.wa_name) {
+                        memberName = auth.wa_name;
+                    }
+                } catch (e) {
+                    // ignore
+                }
 
-                // Tính giá trị USD của số dư SOL
-                // const solanaBalanceUsd = solanaBalance * solPriceInUsd;
+                // Nếu không có name trong wallet_auth, để null (không fallback)
 
                 return {
                     connection_id: connection.mc_id,
                     member_id: connection.mc_member_wallet,
                     member_address: connection.member_wallet?.wallet_solana_address || 'Unknown',
+                    member_name: memberName,
+                    member_nickname: memberNickname,
                     status: connection.mc_status,
                     option_limit: connection.mc_option_limit,
                     price_limit: connection.mc_price_limit,
