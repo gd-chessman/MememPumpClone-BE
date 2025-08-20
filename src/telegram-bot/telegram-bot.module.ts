@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
 import { TelegramBotService } from './telegram-bot.service';
+import { TelegramBossBotService } from './telegram-boss-bot.service';
 import { ListWallet } from '../telegram-wallets/entities/list-wallet.entity';
 import { UserWallet } from '../telegram-wallets/entities/user-wallet.entity';
 import { WalletAuth } from '../telegram-wallets/entities/wallet-auth.entity';
@@ -35,11 +36,13 @@ import { GoogleAuthService } from './google-auth.service';
   controllers: [LoginEmailController],
   providers: [
     TelegramBotService, 
+    TelegramBossBotService,
     LoginEmailService, 
     GoogleAuthService
   ],
   exports: [
     TelegramBotService, 
+    TelegramBossBotService,
     GoogleAuthService
   ],
 })
