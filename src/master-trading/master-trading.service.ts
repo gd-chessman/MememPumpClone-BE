@@ -2695,20 +2695,37 @@ feeIncrease: '${((slippage / 3 - 1) * 100).toFixed(4)}%'
                             }
 
                             // Cập nhật group_id mới
-                            existingAuth.mga_group_id = dto.mg_id;
-                            const updatedAuth = await this.masterGroupAuthRepository.save(existingAuth);
-
-                            results.success.push({
-                                member_id: memberId,
-                                mga_id: updatedAuth.mga_id,
-                                mga_status: updatedAuth.mga_status,
-                                member_info: {
-                                    wallet_id: targetWallet.wallet_id,
-                                    wallet_solana_address: targetWallet.wallet_solana_address,
-                                    wallet_auth: targetWallet.wallet_auth
-                                },
-                                note: 'Wallet was moved from another group'
+                            console.log(`Moving member ${memberId} from group ${existingAuth.mga_group_id} to group ${dto.mg_id}`);
+                            
+                            // Sử dụng update thay vì save để đảm bảo cập nhật đúng
+                            await this.masterGroupAuthRepository.update(
+                                { mga_id: existingAuth.mga_id },
+                                { mga_group_id: dto.mg_id }
+                            );
+                            
+                            // Lấy lại record đã cập nhật
+                            const updatedAuth = await this.masterGroupAuthRepository.findOne({
+                                where: { mga_id: existingAuth.mga_id }
                             });
+
+                            if (updatedAuth) {
+                                results.success.push({
+                                    member_id: memberId,
+                                    mga_id: updatedAuth.mga_id,
+                                    mga_status: updatedAuth.mga_status,
+                                    member_info: {
+                                        wallet_id: targetWallet.wallet_id,
+                                        wallet_solana_address: targetWallet.wallet_solana_address,
+                                        wallet_auth: targetWallet.wallet_auth
+                                    },
+                                    note: 'Wallet was moved from another group'
+                                });
+                            } else {
+                                results.failed.push({
+                                    member_id: memberId,
+                                    reason: 'Failed to update group membership'
+                                });
+                            }
                             continue;
                         }
                     }
@@ -2741,6 +2758,22 @@ feeIncrease: '${((slippage / 3 - 1) * 100).toFixed(4)}%'
                 }
             }
 
+            // Verify kết quả - kiểm tra xem các member thực sự đã được thêm vào group chưa
+            for (const successMember of results.success) {
+                const verifyAuth = await this.masterGroupAuthRepository.findOne({
+                    where: {
+                        mga_wallet_member: successMember.member_id,
+                        mga_group_id: dto.mg_id
+                    }
+                });
+                
+                if (!verifyAuth) {
+                    console.error(`Verification failed: Member ${successMember.member_id} not found in group ${dto.mg_id}`);
+                } else {
+                    console.log(`Verification passed: Member ${successMember.member_id} successfully in group ${dto.mg_id}`);
+                }
+            }
+            
             return {
                 status: 200,
                 message: `Processed ${results.success.length} wallets successfully, ${results.failed.length} failed`,
