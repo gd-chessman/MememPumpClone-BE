@@ -4,7 +4,7 @@ import { Repository, Like, MoreThan } from 'typeorm';
 import { AirdropListToken, AirdropListTokenStatus } from '../airdrops/entities/airdrop-list-token.entity';
 import { AirdropListPool, AirdropPoolStatus } from '../airdrops/entities/airdrop-list-pool.entity';
 import { AirdropPoolJoin, AirdropPoolJoinStatus } from '../airdrops/entities/airdrop-pool-join.entity';
-import { AirdropReward, AirdropRewardStatus, AirdropRewardType } from '../airdrops/entities/airdrop-reward.entity';
+import { AirdropReward, AirdropRewardStatus, AirdropRewardType, AirdropRewardSubType } from '../airdrops/entities/airdrop-reward.entity';
 import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
 import { 
   createTransferInstruction, 
@@ -313,33 +313,34 @@ export class AirdropAdminService {
   }
 
   async getAirdropRewards(getAirdropRewardsDto: GetAirdropRewardsDto) {
-    const { page = 1, limit = 20, token_mint, alt_id, status = AirdropRewardStatus.CAN_WITHDRAW, search, type } = getAirdropRewardsDto;
+    const { page = 1, limit = 20, token_mint, alt_id, status = AirdropRewardStatus.CAN_WITHDRAW, search, type, sub_type } = getAirdropRewardsDto;
 
     const offset = (page - 1) * limit;
 
     // Build query with proper joins
-    const queryBuilder = this.airdropRewardRepository
-      .createQueryBuilder('reward')
-      .leftJoin('reward.tokenAirdrop', 'token')
-      .leftJoin('reward.wallet', 'wallet')
-      .leftJoin('wallet.wallet_auths', 'walletAuth')
-      .leftJoin('walletAuth.wa_user', 'userWallet')
-      .select([
-        'reward.ar_id',
-        'reward.ar_token_airdrop_id',
-        'reward.ar_wallet_id',
-        'reward.ar_wallet_address',
-        'reward.ar_amount',
-        'reward.ar_type',
-        'reward.ar_status',
-        'reward.ar_hash',
-        'reward.ar_date',
-        'wallet.wallet_solana_address',
-        'wallet.bittworld_uid',
-        'userWallet.uw_email',
-        'token.alt_token_name',
-        'token.alt_token_mint'
-      ])
+        const queryBuilder = this.airdropRewardRepository
+        .createQueryBuilder('reward')
+        .leftJoin('reward.tokenAirdrop', 'token')
+        .leftJoin('reward.wallet', 'wallet')
+        .leftJoin('wallet.wallet_auths', 'walletAuth')
+        .leftJoin('walletAuth.wa_user', 'userWallet')
+        .select([
+          'reward.ar_id',
+          'reward.ar_token_airdrop_id',
+          'reward.ar_wallet_id',
+          'reward.ar_wallet_address',
+          'reward.ar_amount',
+          'reward.ar_type',
+          'reward.ar_sub_type',
+          'reward.ar_status',
+          'reward.ar_hash',
+          'reward.ar_date',
+          'wallet.wallet_solana_address',
+          'wallet.bittworld_uid',
+          'userWallet.uw_email',
+          'token.alt_token_name',
+          'token.alt_token_mint'
+        ])
       .where('reward.ar_status = :status', { status });
 
     // Add filters
@@ -353,6 +354,10 @@ export class AirdropAdminService {
 
     if (type) {
       queryBuilder.andWhere('reward.ar_type = :type', { type });
+    }
+
+    if (sub_type) {
+      queryBuilder.andWhere('reward.ar_sub_type = :sub_type', { sub_type });
     }
 
     if (search) {
@@ -381,6 +386,7 @@ export class AirdropAdminService {
       ar_wallet_address: reward.reward_ar_wallet_address,
       ar_amount: reward.reward_ar_amount,
       ar_type: reward.reward_ar_type,
+      ar_sub_type: reward.reward_ar_sub_type,
       ar_status: reward.reward_ar_status,
       ar_hash: reward.reward_ar_hash,
       ar_date: reward.reward_ar_date,
@@ -734,6 +740,7 @@ export class AirdropAdminService {
           ar_wallet_address: string;
           ar_amount: number;
           ar_type: AirdropRewardType;
+          ar_sub_type?: AirdropRewardSubType;
           ar_status: AirdropRewardStatus;
           ar_hash: string | null;
         }> = [];
@@ -838,17 +845,52 @@ export class AirdropAdminService {
           }
 
             if (participantReward > 0) {
-              rewardsToCreate.push({
-                ar_token_airdrop_id: token.alt_id,
-                ar_wallet_id: walletId,
-                ar_wallet_address: participant.wallet_address,
-                ar_amount: participantReward,
-                ar_type: AirdropRewardType.TYPE_1,
-                ar_status: AirdropRewardStatus.CAN_WITHDRAW,
-                ar_hash: null
-              });
+              // Tách riêng reward cho creator thành 2 records: leader_bonus và participation_share
+              if (pool.originator && walletId === pool.originator.wallet_id) {
+                // Record cho Leader Bonus (10%)
+                if (creatorReward > 0) {
+                  rewardsToCreate.push({
+                    ar_token_airdrop_id: token.alt_id,
+                    ar_wallet_id: walletId,
+                    ar_wallet_address: participant.wallet_address,
+                    ar_amount: creatorReward,
+                    ar_type: AirdropRewardType.TYPE_1,
+                    ar_sub_type: AirdropRewardSubType.LEADER_BONUS,
+                    ar_status: AirdropRewardStatus.CAN_WITHDRAW,
+                    ar_hash: null
+                  });
+                  this.logger.log(`Created LEADER_BONUS reward for creator ${walletId}: ${creatorReward} tokens`);
+                }
 
-              this.logger.log(`Created reward for wallet ${walletId}: ${participantReward} tokens`);
+                // Record cho Participation Share (90% share)
+                const creatorRemainingReward = remainingReward * (participant.total_volume / poolTotalVolume);
+                if (creatorRemainingReward > 0) {
+                  rewardsToCreate.push({
+                    ar_token_airdrop_id: token.alt_id,
+                    ar_wallet_id: walletId,
+                    ar_wallet_address: participant.wallet_address,
+                    ar_amount: creatorRemainingReward,
+                    ar_type: AirdropRewardType.TYPE_1,
+                    ar_sub_type: AirdropRewardSubType.PARTICIPATION_SHARE,
+                    ar_status: AirdropRewardStatus.CAN_WITHDRAW,
+                    ar_hash: null
+                  });
+                  this.logger.log(`Created PARTICIPATION_SHARE reward for creator ${walletId}: ${creatorRemainingReward} tokens`);
+                }
+              } else {
+                // Record cho Staker (90% share)
+                rewardsToCreate.push({
+                  ar_token_airdrop_id: token.alt_id,
+                  ar_wallet_id: walletId,
+                  ar_wallet_address: participant.wallet_address,
+                  ar_amount: participantReward,
+                  ar_type: AirdropRewardType.TYPE_1,
+                  ar_sub_type: AirdropRewardSubType.PARTICIPATION_SHARE,
+                  ar_status: AirdropRewardStatus.CAN_WITHDRAW,
+                  ar_hash: null
+                });
+                this.logger.log(`Created PARTICIPATION_SHARE reward for staker ${walletId}: ${participantReward} tokens`);
+              }
             }
           }
 
@@ -1079,6 +1121,7 @@ export class AirdropAdminService {
           ar_wallet_address: pool.originator_wallet_solana_address,
           ar_amount: rewardAmount,
           ar_type: AirdropRewardType.TYPE_2,
+          ar_sub_type: AirdropRewardSubType.TOP_POOL_REWARD,
           ar_status: AirdropRewardStatus.CAN_WITHDRAW,
           ar_hash: null
         });
