@@ -2649,15 +2649,13 @@ feeIncrease: '${((slippage / 3 - 1) * 100).toFixed(4)}%'
                         continue;
                     }
 
-                    if (masterGroupIds.length > 0) {
-                        // Kiểm tra wallet đã tham gia bất kỳ group nào của master này chưa
-                        const existingAuth = await this.masterGroupAuthRepository.findOne({
-                            where: {
-                                mga_group_id: In(masterGroupIds),
-                                mga_wallet_member: memberId
-                            },
-                            relations: ['master_group']
-                        });
+                    // Kiểm tra wallet đã tham gia bất kỳ group nào chưa (để tránh race condition)
+                    const existingAuth = await this.masterGroupAuthRepository.findOne({
+                        where: {
+                            mga_wallet_member: memberId
+                        },
+                        relations: ['master_group']
+                    });
 
                         if (existingAuth) {
                             // Kiểm tra group hiện tại có phải delete-hidden không
@@ -2728,9 +2726,9 @@ feeIncrease: '${((slippage / 3 - 1) * 100).toFixed(4)}%'
                             }
                             continue;
                         }
-                    }
 
                     // Tạo mới master_group_auth với trạng thái mặc định là "running"
+                    // Sử dụng upsert để tránh race condition
                     const newAuth = new MasterGroupAuth();
                     newAuth.mga_group_id = dto.mg_id;
                     newAuth.mga_wallet_member = memberId;
