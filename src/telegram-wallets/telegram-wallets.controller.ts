@@ -6,6 +6,8 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { WalletPrivateKeysResponseDto } from './dto/wallet-private-keys.dto';
 import { AddWalletDto, AddWalletResponseDto } from './dto/add-wallet.dto';
 import { DeleteWalletDto, DeleteWalletResponseDto } from './dto/delete-wallet.dto';
+import { DeleteMultipleWalletsDto } from './dto/delete-multiple-wallets.dto';
+import { DeleteMultipleWalletsResponseDto } from './dto/delete-multiple-wallets-response.dto';
 import { UpdateWalletDto, UpdateWalletResponseDto } from './dto/change-wallet-name.dto';
 import { GetMyWalletsResponseDto } from './dto/get-my-wallets.dto';
 import { UseWalletDto, UseWalletResponseDto } from './dto/use-wallet.dto';
@@ -228,6 +230,43 @@ export class TelegramWalletsController {
                 status: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
                 error: error.message,
                 message: 'Failed to delete wallet'
+            }, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @Post('delete-multiple-wallets')
+    @ApiOperation({ summary: 'Xóa hàng loạt liên kết ví' })
+    @ApiResponse({ status: 200, description: 'Xóa hàng loạt ví hoàn tất', type: DeleteMultipleWalletsResponseDto })
+    @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
+    @ApiResponse({ status: 401, description: 'Không được phép' })
+    @ApiResponse({ status: 404, description: 'User không tìm thấy' })
+    async deleteMultipleWallets(@Request() req, @Body() deleteMultipleWalletsDto: DeleteMultipleWalletsDto) {
+        try {
+            if (!deleteMultipleWalletsDto.wallet_ids || deleteMultipleWalletsDto.wallet_ids.length === 0) {
+                throw new HttpException({
+                    status: HttpStatus.BAD_REQUEST,
+                    error: 'Wallet IDs array is required',
+                    message: 'Missing required fields'
+                }, HttpStatus.BAD_REQUEST);
+            }
+
+            const result = await this.telegramWalletsService.deleteMultipleWallets(req.user, deleteMultipleWalletsDto.wallet_ids);
+            
+            if (result.status === 404) {
+                throw new HttpException({
+                    status: HttpStatus.NOT_FOUND,
+                    error: result.message,
+                    message: 'User not found'
+                }, HttpStatus.NOT_FOUND);
+            }
+
+            return result;
+        } catch (error) {
+            throw new HttpException({
+                status: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+                error: error.message,
+                message: 'Failed to delete multiple wallets'
             }, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }

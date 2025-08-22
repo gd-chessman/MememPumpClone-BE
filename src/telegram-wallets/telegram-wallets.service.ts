@@ -1116,6 +1116,137 @@ export class TelegramWalletsService {
         }
     }
 
+    async deleteMultipleWallets(user, walletIds: number[]) {
+        try {
+            const { uid, wallet_id: currentWalletId } = user;
+
+            // Kiểm tra user có tồn tại không
+            const userWallet = await this.userWalletRepository.findOne({
+                where: { uw_id: uid }
+            });
+
+            if (!userWallet) {
+                return {
+                    status: 404,
+                    message: 'User not found',
+                    total_processed: 0,
+                    success_count: 0,
+                    failed_count: 0,
+                    success_wallets: [],
+                    failed_wallets: []
+                };
+            }
+
+            // Loại bỏ duplicate wallet IDs
+            const uniqueWalletIds = [...new Set(walletIds)];
+            
+            // Kết quả xử lý
+            const results = {
+                success_wallets: [] as Array<{
+                    wallet_id: number;
+                    wallet_type: string;
+                    wallet_name: string | null;
+                    solana_address: string | null;
+                    eth_address: string | null;
+                }>,
+                failed_wallets: [] as Array<{
+                    wallet_id: number;
+                    reason: string;
+                }>
+            };
+
+            // Xử lý từng wallet ID
+            for (const walletId of uniqueWalletIds) {
+                try {
+                    // Kiểm tra xem wallet có đang được sử dụng không
+                    if (currentWalletId === walletId) {
+                        results.failed_wallets.push({
+                            wallet_id: walletId,
+                            reason: 'Cannot delete wallet that is currently in use'
+                        });
+                        continue;
+                    }
+
+                    // Kiểm tra liên kết giữa user và wallet có tồn tại không
+                    const walletAuth = await this.walletAuthRepository.findOne({
+                        where: {
+                            wa_user_id: uid,
+                            wa_wallet_id: walletId
+                        },
+                        relations: ['wa_wallet']
+                    });
+
+                    if (!walletAuth) {
+                        results.failed_wallets.push({
+                            wallet_id: walletId,
+                            reason: 'Wallet not linked to this user'
+                        });
+                        continue;
+                    }
+
+                    // Không cho phép xóa ví chính (main)
+                    if (walletAuth.wa_type === 'main') {
+                        results.failed_wallets.push({
+                            wallet_id: walletId,
+                            reason: 'Cannot delete main wallet'
+                        });
+                        continue;
+                    }
+
+                    // Lưu thông tin ví để trả về
+                    const walletInfo = {
+                        wallet_id: walletAuth.wa_wallet_id,
+                        wallet_type: walletAuth.wa_type,
+                        wallet_name: walletAuth.wa_name,
+                        solana_address: walletAuth.wa_wallet?.wallet_solana_address || null,
+                        eth_address: walletAuth.wa_wallet?.wallet_eth_address || null
+                    };
+
+                    // Xóa liên kết trong wallet_auth
+                    await this.walletAuthRepository.remove(walletAuth);
+
+                    results.success_wallets.push(walletInfo);
+                    this.logger.log(`Successfully deleted wallet ${walletId} for user ${uid}`);
+
+                } catch (error) {
+                    this.logger.error(`Error deleting wallet ${walletId}: ${error.message}`);
+                    results.failed_wallets.push({
+                        wallet_id: walletId,
+                        reason: `Internal error: ${error.message}`
+                    });
+                }
+            }
+
+            const totalProcessed = uniqueWalletIds.length;
+            const successCount = results.success_wallets.length;
+            const failedCount = results.failed_wallets.length;
+
+            this.logger.log(`Bulk wallet deletion completed: ${successCount} success, ${failedCount} failed out of ${totalProcessed} total`);
+
+            return {
+                status: 200,
+                message: 'Bulk wallet deletion completed',
+                total_processed: totalProcessed,
+                success_count: successCount,
+                failed_count: failedCount,
+                success_wallets: results.success_wallets,
+                failed_wallets: results.failed_wallets
+            };
+
+        } catch (error) {
+            this.logger.error(`Error in bulk wallet deletion: ${error.message}`, error.stack);
+            return {
+                status: 500,
+                message: `Error in bulk wallet deletion: ${error.message}`,
+                total_processed: 0,
+                success_count: 0,
+                failed_count: 0,
+                success_wallets: [],
+                failed_wallets: []
+            };
+        }
+    }
+
     async getMyWallets(user) {
         try {
             const { uid } = user;
