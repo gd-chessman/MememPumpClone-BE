@@ -186,7 +186,7 @@ export class TelegramWalletsController {
                 throw new HttpException({
                     status: HttpStatus.BAD_REQUEST,
                     error: result.message,
-                    message: 'Failed to add wallet'
+                    message: result.message
                 }, HttpStatus.BAD_REQUEST);
             }
             
