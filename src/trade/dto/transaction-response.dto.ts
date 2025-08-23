@@ -1,5 +1,5 @@
 export class TransactionResponseDto {
-    order_id: number;
+    order_id: string;
 
     transaction_data: {
         instructions: any[];

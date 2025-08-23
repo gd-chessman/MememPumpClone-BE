@@ -1,8 +1,8 @@
 import { IsString, IsNumber } from 'class-validator';
 
 export class SubmitSignedTransactionDto {
-    @IsNumber()
-    order_id: number;
+    @IsString()
+    order_id: string;
 
     @IsString()
     signature: string;

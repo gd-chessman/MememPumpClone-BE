@@ -34,6 +34,7 @@ import { CacheModule } from '../cache/cache.module';
 import { BirdeyeService } from '../on-chain/birdeye.service';
 import { ReferralModule } from '../referral/referral.module';
 import { PhantomTradeService } from './services/phantom-trade.service';
+import { PhantomTradeController } from './phantom-trade.controller';
 
 @Module({
     imports: [
@@ -68,7 +69,7 @@ import { PhantomTradeService } from './services/phantom-trade.service';
         forwardRef(() => WebSocketModule),
         ReferralModule
     ],
-    controllers: [TradeController],
+    controllers: [TradeController, PhantomTradeController],
     providers: [
         TradeService,
         OrderCacheService,

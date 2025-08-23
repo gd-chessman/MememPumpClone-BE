@@ -12,19 +12,16 @@ import { OrderBookService } from './order-book.service';
 import { StandardResponse } from './interfaces/standard-response.interface';
 import { AuthRequest } from '../auth/interfaces/auth-request.interface';
 import { GetAmountResponseDto } from './dto/get-amount.dto';
-import { PhantomTradeService } from './services/phantom-trade.service';
-import { CreateTransactionRequestDto } from './dto/create-transaction-request.dto';
-import { SubmitSignedTransactionDto } from './dto/submit-signed-transaction.dto';
+
 
 @Controller('trade')
-@UseGuards(JwtAuthGuard)
+// @UseGuards(JwtAuthGuard)
 export class TradeController {
     private readonly logger = new Logger(TradeController.name);
 
     constructor(
         private readonly tradeService: TradeService,
-        private readonly orderBookService: OrderBookService,
-        private readonly phantomTradeService: PhantomTradeService
+        private readonly orderBookService: OrderBookService
     ) { }
 
     @Post('orders')
@@ -255,176 +252,5 @@ export class TradeController {
             }, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-
-    // ========== PHANTOM WALLET ENDPOINTS ==========
-
-    @Post('phantom/create-transaction')
-    @UseGuards(RateLimitGuard, CircuitBreakerGuard)
-    async createTransaction(
-        @Body() createTransactionRequestDto: CreateTransactionRequestDto
-    ) {
-        try {
-            if (!createTransactionRequestDto.user_wallet_address) {
-                throw new HttpException({
-                    status: HttpStatus.BAD_REQUEST,
-                    error: 'Missing required fields',
-                    message: 'User wallet address is required'
-                }, HttpStatus.BAD_REQUEST);
-            }
-
-            const result = await this.phantomTradeService.createTransaction(createTransactionRequestDto);
-            
-            if (result.status === HttpStatus.BAD_REQUEST) {
-                throw new HttpException({
-                    status: HttpStatus.BAD_REQUEST,
-                    error: result.error,
-                    message: result.message
-                }, HttpStatus.BAD_REQUEST);
-            }
-
-            if (result.status === HttpStatus.INTERNAL_SERVER_ERROR) {
-                throw new HttpException({
-                    status: HttpStatus.INTERNAL_SERVER_ERROR,
-                    error: result.error,
-                    message: result.message
-                }, HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-
-            return result;
-        } catch (error) {
-            throw new HttpException({
-                status: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-                error: error.message,
-                message: 'Failed to create transaction'
-            }, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @Post('phantom/submit-signed-transaction')
-    @UseGuards(RateLimitGuard, CircuitBreakerGuard)
-    async submitSignedTransaction(
-        @Body() submitSignedTransactionDto: SubmitSignedTransactionDto
-    ) {
-        try {
-            if (!submitSignedTransactionDto.order_id || 
-                !submitSignedTransactionDto.signature || 
-                !submitSignedTransactionDto.signed_transaction) {
-                throw new HttpException({
-                    status: HttpStatus.BAD_REQUEST,
-                    error: 'Missing required fields',
-                    message: 'Order ID, signature and signed transaction are required'
-                }, HttpStatus.BAD_REQUEST);
-            }
-
-            const result = await this.phantomTradeService.submitSignedTransaction(submitSignedTransactionDto);
-            
-            if (result.status === HttpStatus.BAD_REQUEST) {
-                throw new HttpException({
-                    status: HttpStatus.BAD_REQUEST,
-                    error: result.error,
-                    message: result.message
-                }, HttpStatus.BAD_REQUEST);
-            }
-
-            if (result.status === HttpStatus.NOT_FOUND) {
-                throw new HttpException({
-                    status: HttpStatus.NOT_FOUND,
-                    error: result.error,
-                    message: result.message
-                }, HttpStatus.NOT_FOUND);
-            }
-
-            if (result.status === HttpStatus.INTERNAL_SERVER_ERROR) {
-                throw new HttpException({
-                    status: HttpStatus.INTERNAL_SERVER_ERROR,
-                    error: result.error,
-                    message: result.message
-                }, HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-
-            return result;
-        } catch (error) {
-            throw new HttpException({
-                status: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-                error: error.message,
-                message: 'Failed to submit signed transaction'
-            }, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @Get('phantom/orders')
-    async getPhantomOrders(
-        @Query('wallet_address') walletAddress: string,
-        @Query('limit') limit: number = 10,
-        @Query('offset') offset: number = 0
-    ) {
-        try {
-            if (!walletAddress) {
-                throw new HttpException({
-                    status: HttpStatus.BAD_REQUEST,
-                    error: 'Wallet address is required',
-                    message: 'Phantom wallet address is required'
-                }, HttpStatus.BAD_REQUEST);
-            }
-
-            const result = await this.phantomTradeService.getPhantomOrders(walletAddress, limit, offset);
-
-            if (result.status === HttpStatus.INTERNAL_SERVER_ERROR) {
-                throw new HttpException({
-                    status: HttpStatus.INTERNAL_SERVER_ERROR,
-                    error: result.error,
-                    message: result.message
-                }, HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-
-            return result;
-        } catch (error) {
-            throw new HttpException({
-                status: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-                error: error.message,
-                message: 'Failed to get Phantom orders'
-            }, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    @Get('phantom/verify-transaction/:transactionHash')
-    async verifyPhantomTransaction(
-        @Param('transactionHash') transactionHash: string
-    ) {
-        try {
-            if (!transactionHash) {
-                throw new HttpException({
-                    status: HttpStatus.BAD_REQUEST,
-                    error: 'Transaction hash is required',
-                    message: 'Transaction hash is required'
-                }, HttpStatus.BAD_REQUEST);
-            }
-
-            const result = await this.phantomTradeService.verifyTransactionStatus(transactionHash);
-
-            if (result.status === HttpStatus.NOT_FOUND) {
-                throw new HttpException({
-                    status: HttpStatus.NOT_FOUND,
-                    error: result.message,
-                    message: 'Order not found'
-                }, HttpStatus.NOT_FOUND);
-            }
-
-            if (result.status === HttpStatus.INTERNAL_SERVER_ERROR) {
-                throw new HttpException({
-                    status: HttpStatus.INTERNAL_SERVER_ERROR,
-                    error: result.error,
-                    message: result.message
-                }, HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-
-            return result;
-        } catch (error) {
-            throw new HttpException({
-                status: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-                error: error.message,
-                message: 'Failed to verify transaction'
-            }, error.status || HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
+    
 } 
