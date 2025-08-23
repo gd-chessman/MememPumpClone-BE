@@ -15,7 +15,7 @@ import { GetAmountResponseDto } from './dto/get-amount.dto';
 
 
 @Controller('trade')
-// @UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class TradeController {
     private readonly logger = new Logger(TradeController.name);
 
