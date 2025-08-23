@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Query, Param, Post, Body, Logger } from '@nestjs/common';
+import { Controller, Get, UseGuards, Query, Param, Post, Body, Logger, BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OnChainService } from './on-chain.service';
 import { BirdeyeService, Timeframe } from './birdeye.service';
@@ -372,6 +372,45 @@ export class OnChainController {
             };
         } catch (error) {
             this.logger.error(`Error getting token holders: ${error.message}`);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    @Get('token-balance')
+    async getTokenBalance(
+        @Query('walletAddress') walletAddress: string,
+        @Query('tokenAddress') tokenAddress: string
+    ) {
+        try {
+            if (!walletAddress || !tokenAddress) {
+                throw new BadRequestException('Wallet address and token address are required');
+            }
+
+            this.logger.log(`Getting token balance for wallet ${walletAddress} and token ${tokenAddress}`);
+
+            // Get token balance
+            const balance = await this.solanaService.getTokenBalance(walletAddress, tokenAddress);
+
+            // Get token price
+            const priceData = await this.solanaService.getTokenPriceInRealTime(tokenAddress);
+
+            return {
+                success: true,
+                data: {
+                    wallet_address: walletAddress,
+                    token_address: tokenAddress,
+                    balance: balance,
+                    price: {
+                        usd: priceData?.priceUSD || 0,
+                        sol: priceData?.priceSOL || 0
+                    }
+                }
+            };
+        } catch (error) {
+            this.logger.error(`Error getting token balance: ${error.message}`);
             return {
                 success: false,
                 error: error.message
