@@ -376,8 +376,8 @@ export class PhantomTradeService {
                 // Buy token with SOL
                 inputMint = SOL_MINT;
                 outputMint = createTransactionRequestDto.order_token_address;
-                // Calculate SOL amount needed (price * quantity)
-                const solAmount = createTransactionRequestDto.order_price * createTransactionRequestDto.order_qlty;
+                // Quantity is the SOL amount to spend
+                const solAmount = createTransactionRequestDto.order_qlty;
                 amount = (solAmount * 1e9).toString(); // Convert SOL to lamports
             } else {
                 // Sell token for SOL
