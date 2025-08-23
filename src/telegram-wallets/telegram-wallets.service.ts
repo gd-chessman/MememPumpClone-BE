@@ -589,18 +589,6 @@ export class TelegramWalletsService {
                     };
                 }
 
-                const existingWalletWithNickName = await this.listWalletRepository.findOne({
-                    where: { wallet_nick_name: nick_name }
-                });
-
-                if (existingWalletWithNickName) {
-                    return {
-                        status: 409,
-                        error_code: 'NICKNAME_EXISTS',
-                        message: 'Wallet nickname already exists',
-                    };
-                }
-
                 // Chỉ kiểm tra tên ví có trùng không khi name không phải null/undefined
                 if (name) {
                     const existingWalletAuth = await this.walletAuthRepository.findOne({
@@ -616,6 +604,18 @@ export class TelegramWalletsService {
                             message: 'Wallet name already exists for this user',
                         };
                     }
+                }
+
+                const existingWalletWithNickName = await this.listWalletRepository.findOne({
+                    where: { wallet_nick_name: nick_name }
+                });
+
+                if (existingWalletWithNickName) {
+                    return {
+                        status: 409,
+                        error_code: 'NICKNAME_EXISTS',
+                        message: 'Wallet nickname already exists',
+                    };
                 }
 
                 // Tạo ví mới nếu type là 'other'
@@ -724,6 +724,23 @@ export class TelegramWalletsService {
                             status: 400,
                             message: 'Nickname is required for new imported wallet',
                         };
+                    }
+
+                    // Chỉ kiểm tra tên ví có trùng không khi name không phải null/undefined
+                    if (name) {
+                        const existingWalletAuth = await this.walletAuthRepository.findOne({
+                            where: {
+                                wa_user_id: uid,
+                                wa_name: name
+                            }
+                        });
+
+                        if (existingWalletAuth) {
+                            return {
+                                status: 400,
+                                message: 'Wallet name already exists for this user',
+                            };
+                        }
                     }
 
                     // Kiểm tra nick_name đã tồn tại chưa

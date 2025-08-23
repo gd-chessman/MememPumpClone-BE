@@ -33,6 +33,7 @@ import { WebSocketModule } from '../websocket/websocket.module';
 import { CacheModule } from '../cache/cache.module';
 import { BirdeyeService } from '../on-chain/birdeye.service';
 import { ReferralModule } from '../referral/referral.module';
+import { PhantomTradeService } from './services/phantom-trade.service';
 
 @Module({
     imports: [
@@ -76,7 +77,8 @@ import { ReferralModule } from '../referral/referral.module';
         MasterGroupRepository,
         // TransactionStatusMonitorService,
         OrderBookService,
-        BirdeyeService
+        BirdeyeService,
+        PhantomTradeService
     ],
     exports: [TradeService, OrderCacheService, OrderBookService]
 })
