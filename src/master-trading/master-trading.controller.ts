@@ -16,7 +16,6 @@ import { MasterCreateGroupDto } from './dto/master-create-group.dto';
 import { ApiOperation, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { MasterSetGroupDto } from './dto/master-set-group.dto';
 import { CheckMasterDto } from './dto/check-master.dto';
-import { ChangeStreamDto } from './dto/change-stream.dto';
 
 @Controller('master-trading')
 export class MasterTradingController {
@@ -767,32 +766,25 @@ export class MasterTradingController {
     @UseGuards(JwtAuthGuard)
     @ApiOperation({
         summary: 'Change master wallet stream status',
-        description: 'Change stream status between normal and vip, requires password verification'
+        description: 'Change stream status between normal and vip without password verification'
     })
     @ApiResponse({ status: 200, description: 'Stream status changed successfully' })
-    @ApiResponse({ status: 400, description: 'Invalid input data' })
     @ApiResponse({ status: 401, description: 'Unauthorized' })
     @ApiResponse({ status: 403, description: 'Not a master wallet' })
-    @ApiBody({ type: ChangeStreamDto })
     async changeStream(
-        @Request() req,
-        @Body() changeStreamDto: ChangeStreamDto
+        @Request() req
     ) {
         if (!req.user?.wallet_id) {
             throw new HttpException('Invalid or missing JWT token', HttpStatus.UNAUTHORIZED);
         }
 
         const result = await this.masterTradingService.changeStream(
-            req.user.wallet_id,
-            req.user.uid,
-            changeStreamDto.password
+            req.user.wallet_id
         );
 
         switch (result.status) {
             case 403:
                 throw new HttpException('Not a master wallet', HttpStatus.FORBIDDEN);
-            case 400:
-                throw new HttpException('Invalid password', HttpStatus.BAD_REQUEST);
             case 500:
                 throw new HttpException('Internal server error', HttpStatus.INTERNAL_SERVER_ERROR);
             default:

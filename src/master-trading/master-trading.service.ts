@@ -39,7 +39,6 @@ import { SolanaTrackingService } from '../solana/services/tracking.service';
 import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { SolanaPriceCacheService } from '../solana/solana-price-cache.service';
 import { extractSolanaPrivateKey } from '../utils/key-utils';
-import { UserWallet } from '../telegram-wallets/entities/user-wallet.entity';
 import { WalletAuth } from '../telegram-wallets/entities/wallet-auth.entity';
 
 @Injectable()
@@ -90,8 +89,7 @@ export class MasterTradingService implements OnModuleInit {
         private readonly solanaWebSocketService: SolanaWebSocketService,
         private readonly solanaTrackingService: SolanaTrackingService,
         private solanaPriceCacheService: SolanaPriceCacheService,
-        @InjectRepository(UserWallet)
-        private userWalletRepository: Repository<UserWallet>,
+
         @InjectRepository(WalletAuth)
         private walletAuthRepository: Repository<WalletAuth>
     ) {
@@ -4000,9 +3998,7 @@ feeIncrease: '${((slippage / 3 - 1) * 100).toFixed(4)}%'
     }
 
     async changeStream(
-        walletId: number,
-        uid: number,
-        password: string
+        walletId: number
     ): Promise<{ status: number; message?: string; data?: any }> {
         try {
             // Check if wallet is master
@@ -4014,18 +4010,6 @@ feeIncrease: '${((slippage / 3 - 1) * 100).toFixed(4)}%'
                 return {
                     status: 403,
                     message: 'Wallet is not a master wallet'
-                };
-            }
-
-            // Verify password
-            const userWallet = await this.userWalletRepository.findOne({
-                where: { uw_id: uid }
-            });
-
-            if (!userWallet || userWallet.uw_password !== password) {
-                return {
-                    status: 400,
-                    message: 'Invalid password'
                 };
             }
 

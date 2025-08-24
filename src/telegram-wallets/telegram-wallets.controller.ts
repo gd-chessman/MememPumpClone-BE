@@ -16,7 +16,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { GetCategoriesResponseDto } from './dto/get-categories.dto';
 import { GetWalletInfoResponseDto } from './dto/get-wallet-info.dto';
 import { SetWalletPasswordDto } from './dto/set-wallet-password.dto';
-import { VerifyWalletPasswordDto } from './dto/verify-wallet-password.dto';
 import { VerifyResetCodeDto } from './dto/verify-reset-code.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AddGoogleAuthDto, AddGoogleAuthResponseDto } from './dto/add-google-auth.dto';
@@ -634,15 +633,13 @@ export class TelegramWalletsController {
 
     @UseGuards(JwtAuthGuard)
     @Post('private-keys')
-    @ApiOperation({ summary: 'Get wallet private keys (requires password verification)' })
+    @ApiOperation({ summary: 'Get wallet private keys (no password required)' })
     @ApiResponse({ status: 200, description: 'Private keys retrieved successfully' })
-    @ApiResponse({ status: 401, description: 'Invalid password or password not set' })
     @ApiResponse({ status: 404, description: 'Wallet not found' })
     async getWalletPrivateKeys(
-        @Req() req,
-        @Body() dto: VerifyWalletPasswordDto
+        @Req() req
     ) {
-        return this.telegramWalletsService.getWalletPrivateKeys(req.user.uid, req.user.wallet_id, dto);
+        return this.telegramWalletsService.getWalletPrivateKeys(req.user.uid, req.user.wallet_id);
     }
 
     @UseGuards(JwtAuthGuard)

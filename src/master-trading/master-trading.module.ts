@@ -22,7 +22,6 @@ import { SolanaWebSocketService } from '../solana/solana-websocket.service';
 import { AuthModule } from '../auth/auth.module';
 import { WalletAuth } from '../telegram-wallets/entities/wallet-auth.entity';
 import { CacheModule } from '../cache/cache.module';
-import { UserWallet } from '../telegram-wallets/entities/user-wallet.entity';
 
 @Module({
     imports: [
@@ -34,8 +33,7 @@ import { UserWallet } from '../telegram-wallets/entities/user-wallet.entity';
             ListWallet,
             TradingOrder,
             MasterConnect,
-            WalletAuth,
-            UserWallet
+            WalletAuth
         ]),
         EventEmitterModule.forRoot(),
         SolanaModule,

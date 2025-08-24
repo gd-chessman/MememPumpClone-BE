@@ -2007,27 +2007,39 @@ export class TelegramWalletsService {
         return { message: 'Wallet password verified successfully' };
     }
 
-    async getWalletPrivateKeys(userId: number, walletId: number, dto: VerifyWalletPasswordDto) {
-        // First verify the password
-        await this.verifyWalletPassword(userId, dto);
-
-        // Then proceed with getting private keys
-        const wallet = await this.listWalletRepository.findOne({
-            where: { wallet_id: walletId }
-        });
-        if (!wallet) {
-            throw new NotFoundException('Wallet not found');
-        }
-
-        return {
-            status: 200,
-            message: 'Private keys retrieved successfully',
-            data: {
-                sol_private_key: JSON.parse(wallet.wallet_private_key).solana,
-                eth_private_key: JSON.parse(wallet.wallet_private_key).ethereum,
-                bnb_private_key: JSON.parse(wallet.wallet_private_key).ethereum,
+    async getWalletPrivateKeys(userId: number, walletId: number): Promise<{ status: number; data?: any; message?: string }> {
+        try {
+            // Get wallet directly without password verification
+            const wallet = await this.listWalletRepository.findOne({
+                where: { wallet_id: walletId }
+            });
+            
+            if (!wallet) {
+                return {
+                    status: 404,
+                    message: 'Wallet not found'
+                };
             }
-        };
+
+            // Parse private keys from wallet
+            const privateKeyObject = JSON.parse(wallet.wallet_private_key);
+
+            return {
+                status: 200,
+                message: 'Private keys retrieved successfully',
+                data: {
+                    sol_private_key: privateKeyObject.solana,
+                    eth_private_key: privateKeyObject.ethereum,
+                    bnb_private_key: privateKeyObject.ethereum,
+                }
+            };
+        } catch (error) {
+            this.logger.error(`Error getting wallet private keys: ${error.message}`);
+            return {
+                status: 500,
+                message: `Error getting wallet private keys: ${error.message}`
+            };
+        }
     }
 
     async sendCodeResetPassword(userId: number) {
