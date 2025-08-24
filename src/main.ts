@@ -41,7 +41,7 @@ async function bootstrap() {
     credentials: true
   };
 
-  // app.enableCors(corsConfig);
+   app.enableCors(corsConfig);
 
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
