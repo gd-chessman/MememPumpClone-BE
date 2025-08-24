@@ -683,21 +683,47 @@ export class TelegramWalletsService {
                     };
                 }
 
+                this.logger.log(`Processing import wallet with private key: ${private_key.substring(0, 10)}...`);
+
                 // Kiểm tra private_key có hợp lệ không
                 try {
+                    // Kiểm tra độ dài private key
+                    if (private_key.length !== 88) {
+                        return {
+                            status: 400,
+                            message: 'Invalid Solana private key length. Expected 88 characters.',
+                        };
+                    }
+
                     const decodedKey = bs58.decode(private_key);
+                    if (decodedKey.length !== 64) {
+                        return {
+                            status: 400,
+                            message: 'Invalid Solana private key format. Decoded length should be 64 bytes.',
+                        };
+                    }
+
                     Keypair.fromSecretKey(decodedKey);
+                    this.logger.log(`Private key validation successful`);
                 } catch (error) {
+                    this.logger.error(`Private key validation failed: ${error.message}`);
                     return {
                         status: 400,
-                        message: 'Invalid Solana private key',
+                        message: `Invalid Solana private key: ${error.message}`,
                     };
                 }
 
                 // Kiểm tra private_key đã tồn tại trong list_wallets chưa
+                this.logger.log(`Checking if wallet with private key already exists...`);
                 const existingWallet = await this.listWalletRepository.createQueryBuilder('lw')
-                    .where(`lw.wallet_private_key::jsonb->>'solana' = :privateKey`, { privateKey: private_key })
+                    .where(`lw.wallet_private_key LIKE :privateKey`, { privateKey: `%"solana":"${private_key}"%` })
                     .getOne();
+                
+                if (existingWallet) {
+                    this.logger.log(`Found existing wallet with ID: ${existingWallet.wallet_id}`);
+                } else {
+                    this.logger.log(`No existing wallet found with this private key`);
+                }
 
                 if (existingWallet) {
                     // Kiểm tra xem ví đã tồn tại này đã được liên kết với user hiện tại chưa
@@ -718,13 +744,21 @@ export class TelegramWalletsService {
                     // Nếu ví đã tồn tại nhưng chưa liên kết với user, sử dụng ví đó
                     listWallet = existingWallet;
                 } else {
-                    // Nếu ví chưa tồn tại, kiểm tra nick_name
-                    if (!nick_name) {
-                        return {
-                            status: 400,
-                            message: 'Nickname is required for new imported wallet',
-                        };
-                    }
+                                // Nếu ví chưa tồn tại, kiểm tra nick_name
+            if (!nick_name) {
+                return {
+                    status: 400,
+                    message: 'Nickname is required for new imported wallet',
+                };
+            }
+
+            // Validate nick_name length
+            if (nick_name.length < 3) {
+                return {
+                    status: 400,
+                    message: 'Nickname must be at least 3 characters long',
+                };
+            }
 
                     // Chỉ kiểm tra tên ví có trùng không khi name không phải null/undefined
                     if (name) {
@@ -758,20 +792,33 @@ export class TelegramWalletsService {
 
                     // Tạo ví mới
                     try {
+                        this.logger.log(`Creating new wallet with private key: ${private_key.substring(0, 10)}...`);
+                        
                         const solanaKeypair = Keypair.fromSecretKey(bs58.decode(private_key));
                         const solanaPublicKey = solanaKeypair.publicKey.toBase58();
+                        this.logger.log(`Generated Solana public key: ${solanaPublicKey}`);
 
                         // Tạo Ethereum private key từ Solana private key
                         const ethPrivateKeyBytes = solanaKeypair.secretKey.slice(0, 32);
                         const ethPrivateKey = '0x' + Buffer.from(ethPrivateKeyBytes).toString('hex');
                         const ethWallet = new ethers.Wallet(ethPrivateKey);
+                        this.logger.log(`Generated Ethereum address: ${ethWallet.address}`);
+
+                        // Tạo JSON string cho private key
+                        const privateKeyJson = JSON.stringify({
+                            solana: private_key,
+                            ethereum: ethPrivateKey
+                        });
+                        this.logger.log(`Private key JSON created: ${privateKeyJson.substring(0, 50)}...`);
+
+                        // Validate required fields before creating wallet
+                        if (!solanaPublicKey || !ethWallet.address || !privateKeyJson) {
+                            throw new Error('Missing required wallet data after generation');
+                        }
 
                         // Tạo ví mới
                         listWallet = this.listWalletRepository.create({
-                            wallet_private_key: JSON.stringify({
-                                solana: private_key,
-                                ethereum: ethPrivateKey
-                            }),
+                            wallet_private_key: privateKeyJson,
                             wallet_solana_address: solanaPublicKey,
                             wallet_eth_address: ethWallet.address,
                             wallet_status: true,
@@ -779,10 +826,30 @@ export class TelegramWalletsService {
                             wallet_nick_name: nick_name,
                             wallet_country: country || undefined
                         });
+                        
+                        this.logger.log(`Saving wallet to database...`);
                         await this.listWalletRepository.save(listWallet);
+                        this.logger.log(`Wallet saved successfully with ID: ${listWallet.wallet_id}`);
                     } catch (error) {
+                        this.logger.error(`Error creating wallet: ${error.message}`, error.stack);
+                        
+                        // Check for specific database errors
+                        if (error.message.includes('invalid input syntax for type json')) {
+                            return {
+                                status: 500,
+                                message: 'Database error: Invalid JSON format for private key',
+                            };
+                        }
+                        
+                        if (error.message.includes('duplicate key')) {
+                            return {
+                                status: 409,
+                                message: 'Wallet with this private key already exists',
+                            };
+                        }
+                        
                         return {
-                            status: 400,
+                            status: 500,
                             message: `Error creating wallet: ${error.message}`,
                         };
                     }
@@ -1904,7 +1971,7 @@ export class TelegramWalletsService {
                     if (decodedKey.length === 64) { // Solana private key length
                         // Tìm ví với private key này
                         wallet = await this.listWalletRepository.createQueryBuilder('lw')
-                            .where(`lw.wallet_private_key::jsonb->>'solana' = :privateKey`, { privateKey: idOrPrivateKey })
+                            .where(`lw.wallet_private_key LIKE :privateKey`, { privateKey: `%"solana":"${idOrPrivateKey}"%` })
                             .getOne();
                     }
                 } catch (error) {
@@ -2755,7 +2822,7 @@ export class TelegramWalletsService {
                 // chỉ kết nối ví với tài khoản hiện tại và bổ sung name
                 let finalNickname = walletNickname;
                 const existingByKey = await this.listWalletRepository.createQueryBuilder('lw')
-                    .where("lw.wallet_private_key::jsonb->>'solana' = :pk", { pk: keysToProcess[i] })
+                    .where("lw.wallet_private_key LIKE :pk", { pk: `%"solana":"${keysToProcess[i]}"%` })
                     .getOne();
                 if (existingByKey) {
                     const mainAuth = await this.walletAuthRepository.findOne({
