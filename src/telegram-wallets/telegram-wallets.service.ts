@@ -1364,16 +1364,30 @@ export class TelegramWalletsService {
                 };
             }
 
-            // // Lấy giá SOL từ cache
-            // const solPriceInfo = await this.solanaService.getTokenPricesInRealTime(['So11111111111111111111111111111111111111112']);
-            // const solPrice = solPriceInfo.get('So11111111111111111111111111111111111111112');
+            // Lấy giá SOL từ cache
+            let solPrice = 0;
+            try {
+                const solPriceInfo = await this.solanaService.getTokenPricesInRealTime(['So11111111111111111111111111111111111111112']);
+                solPrice = solPriceInfo.get('So11111111111111111111111111111111111111112')?.priceUSD || 0;
+            } catch (error) {
+                this.logger.warn(`Failed to get SOL price: ${error.message}`);
+            }
 
             // Chuyển đổi dữ liệu sang định dạng phản hồi
             const walletsList = await Promise.all(walletAuths.map(async auth => {
-                // Lấy số dư SOL của ví
-                // const solBalance = await this.solanaService.getBalance(auth.wa_wallet?.wallet_solana_address);
-                // Tính số dư USD
-                // const solBalanceUSD = solBalance * (solPrice?.priceUSD || 0);
+                let solBalance: number | null = null;
+                let solBalanceUSD: number | null = null;
+
+                // Lấy số dư SOL của ví nếu có địa chỉ Solana
+                if (auth.wa_wallet?.wallet_solana_address) {
+                    try {
+                        solBalance = await this.solanaService.getBalance(auth.wa_wallet.wallet_solana_address);
+                        // Tính số dư USD
+                        solBalanceUSD = solBalance !== null ? solBalance * solPrice : null;
+                    } catch (error) {
+                        this.logger.warn(`Failed to get balance for wallet ${auth.wa_wallet.wallet_solana_address}: ${error.message}`);
+                    }
+                }
 
                 return {
                     wallet_id: auth.wa_wallet_id,
@@ -1384,8 +1398,8 @@ export class TelegramWalletsService {
                     solana_address: auth.wa_wallet?.wallet_solana_address || null,
                     eth_address: auth.wa_wallet?.wallet_eth_address || null,
                     wallet_auth: auth.wa_wallet?.wallet_auth || 'member',
-                    // solana_balance: solBalance,
-                    // solana_balance_usd: solBalanceUSD
+                    solana_balance: solBalance,
+                    solana_balance_usd: solBalanceUSD
                 };
             }));
 

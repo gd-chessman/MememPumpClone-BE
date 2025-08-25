@@ -21,6 +21,20 @@ export class WalletItemDto {
     wallet_name: string | null;
 
     @ApiProperty({
+        description: 'Nickname của ví',
+        example: 'nickname_01',
+        nullable: true
+    })
+    wallet_nick_name: string | null;
+
+    @ApiProperty({
+        description: 'Quốc gia của ví',
+        example: 'VN',
+        nullable: true
+    })
+    wallet_country: string | null;
+
+    @ApiProperty({
         description: 'Địa chỉ Solana',
         example: 'FkGizKvw3PSZ1SFgVJpotee5o6Jm3XEZ1JGobhXTgbds',
         nullable: true
@@ -39,6 +53,20 @@ export class WalletItemDto {
         example: 'member'
     })
     wallet_auth: string;
+
+    @ApiProperty({
+        description: 'Số dư SOL',
+        example: 1.5,
+        nullable: true
+    })
+    solana_balance: number | null;
+
+    @ApiProperty({
+        description: 'Số dư SOL tính bằng USD',
+        example: 150.75,
+        nullable: true
+    })
+    solana_balance_usd: number | null;
 }
 
 export class GetMyWalletsResponseDto {
